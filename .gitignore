@@ -3,6 +3,7 @@
 *.pkl
 *.pth
 *.pt
+*.onnx
 weights*
 .vscode
 .idea
@@ -164,3 +165,8 @@ cython_debug/
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+tests/data
+
+.archive
+.python-version
+uv.lock

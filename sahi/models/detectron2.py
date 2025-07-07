@@ -8,7 +8,7 @@ import numpy as np
 
 from sahi.models.base import DetectionModel
 from sahi.prediction import ObjectPrediction
-from sahi.utils.cv import get_bbox_from_bool_mask
+from sahi.utils.cv import get_bbox_from_bool_mask, get_coco_segmentation_from_bool_mask
 from sahi.utils.import_utils import check_requirements
 
 logger = logging.getLogger(__name__)
@@ -28,11 +28,13 @@ class Detectron2DetectionModel(DetectionModel):
 
         try:  # try to load from model zoo
             config_file = model_zoo.get_config_file(self.config_path)
+            cfg.set_new_allowed(True)
             cfg.merge_from_file(config_file)
             cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(self.config_path)
         except Exception as e:  # try to load from local
             print(e)
             if self.config_path is not None:
+                cfg.set_new_allowed(True)
                 cfg.merge_from_file(self.config_path)
             cfg.MODEL.WEIGHTS = self.model_path
 
@@ -145,12 +147,13 @@ class Detectron2DetectionModel(DetectionModel):
         category_ids = category_ids[high_confidence_mask]
         if masks is not None:
             masks = masks[high_confidence_mask]
-
         if masks is not None:
             object_prediction_list = [
                 ObjectPrediction(
                     bbox=box.tolist() if mask is None else None,
-                    bool_mask=mask.detach().cpu().numpy() if mask is not None else None,
+                    segmentation=(
+                        get_coco_segmentation_from_bool_mask(mask.detach().cpu().numpy()) if mask is not None else None
+                    ),
                     category_id=category_id.item(),
                     category_name=self.category_mapping[str(category_id.item())],
                     shift_amount=shift_amount,
@@ -164,7 +167,7 @@ class Detectron2DetectionModel(DetectionModel):
             object_prediction_list = [
                 ObjectPrediction(
                     bbox=box.tolist(),
-                    bool_mask=None,
+                    segmentation=None,
                     category_id=category_id.item(),
                     category_name=self.category_mapping[str(category_id.item())],
                     shift_amount=shift_amount,

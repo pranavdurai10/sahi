@@ -217,18 +217,11 @@ def greedy_nmm(
     # according to their confidence scores
     order = scores.argsort()
 
-    # initialise an empty list for
-    # filtered prediction boxes
-    keep = []
-
     while len(order) > 0:
         # extract the index of the
         # prediction with highest score
         # we call this prediction S
         idx = order[-1]
-
-        # push S in filtered predictions list
-        keep.append(idx.tolist())
 
         # remove S from P
         order = order[:-1]
@@ -286,8 +279,8 @@ def greedy_nmm(
 
         # keep the boxes with IoU/IoS less than thresh_iou
         mask = match_metric_value < match_threshold
-        matched_box_indices = order[(mask == False).nonzero().flatten()].flip(dims=(0,))
-        unmatched_indices = order[(mask == True).nonzero().flatten()]
+        matched_box_indices = order[(mask == False).nonzero().flatten()].flip(dims=(0,))  # noqa: E712
+        unmatched_indices = order[(mask == True).nonzero().flatten()]  # noqa: E712
 
         # update box pool
         order = unmatched_indices[scores[unmatched_indices].argsort()]
@@ -302,7 +295,7 @@ def greedy_nmm(
 
 
 def batched_nmm(
-    object_predictions_as_tensor: torch.tensor,
+    object_predictions_as_tensor: torch.Tensor,
     match_metric: str = "IOU",
     match_threshold: float = 0.5,
 ):
@@ -333,7 +326,7 @@ def batched_nmm(
 
 
 def nmm(
-    object_predictions_as_tensor: torch.tensor,
+    object_predictions_as_tensor: torch.Tensor,
     match_metric: str = "IOU",
     match_threshold: float = 0.5,
 ):
@@ -430,7 +423,7 @@ def nmm(
 
         # keep the boxes with IoU/IoS less than thresh_iou
         mask = match_metric_value < match_threshold
-        matched_box_indices = other_pred_inds[(mask == False).nonzero().flatten()].flip(dims=(0,))
+        matched_box_indices = other_pred_inds[(mask == False).nonzero().flatten()].flip(dims=(0,))  # noqa: E712
 
         # create keep_ind to merge_ind_list mapping
         if pred_ind not in merge_to_keep:
@@ -466,7 +459,7 @@ class PostprocessPredictions:
 
         check_requirements(["torch"])
 
-    def __call__(self):
+    def __call__(self, predictions: List[ObjectPrediction]):
         raise NotImplementedError()
 
 

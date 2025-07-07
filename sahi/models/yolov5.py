@@ -2,7 +2,7 @@
 # Code written by Fatih C Akyon, 2020.
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -157,7 +157,7 @@ class Yolov5DetectionModel(DetectionModel):
                     bbox=bbox,
                     category_id=category_id,
                     score=score,
-                    bool_mask=None,
+                    segmentation=None,
                     category_name=category_name,
                     shift_amount=shift_amount,
                     full_shape=full_shape,

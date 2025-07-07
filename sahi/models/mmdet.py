@@ -9,14 +9,13 @@ import numpy as np
 from sahi.models.base import DetectionModel
 from sahi.prediction import ObjectPrediction
 from sahi.utils.compatibility import fix_full_shape_list, fix_shift_amount_list
-from sahi.utils.cv import get_bbox_from_bool_mask
+from sahi.utils.cv import get_bbox_from_bool_mask, get_coco_segmentation_from_bool_mask
 from sahi.utils.import_utils import check_requirements
 
 logger = logging.getLogger(__name__)
 
 
 try:
-
     check_requirements(["torch", "mmdet", "mmcv", "mmengine"])
 
     from mmdet.apis.det_inferencer import DetInferencer
@@ -101,12 +100,13 @@ class MmdetDetectionModel(DetectionModel):
         category_mapping: Optional[Dict] = None,
         category_remapping: Optional[Dict] = None,
         load_at_init: bool = True,
-        image_size: int = None,
+        image_size: Optional[int] = None,
         scope: str = "mmdet",
     ):
-
         if not IMPORT_MMDET_V3:
-            raise ImportError("Failed to import `DetInferencer`. Please confirm you have installed 'mmdet>=3.0.0'")
+            raise ImportError(
+                "Failed to import `DetInferencer`. Please confirm you have installed 'mmdet==3.3.0 mmcv==2.1.0'"
+            )
 
         self.scope = scope
         self.image_size = image_size
@@ -175,8 +175,8 @@ class MmdetDetectionModel(DetectionModel):
             image = image[:, :, ::-1]
         # compatibility with sahi v0.8.15
         if not isinstance(image, list):
-            image = [image]
-        prediction_result = self.model(image)
+            image_list = [image]
+        prediction_result = self.model(image_list)
 
         self._original_predictions = prediction_result["predictions"]
 
@@ -190,15 +190,36 @@ class MmdetDetectionModel(DetectionModel):
     @property
     def has_mask(self):
         """
-        Returns if model output contains segmentation mask
+        Returns if model output contains segmentation mask.
+        Considers both single dataset and ConcatDataset scenarios.
         """
-        has_mask = self.model.model.with_mask
-        return has_mask
+
+        def check_pipeline_for_mask(pipeline):
+            return any(
+                isinstance(item, dict) and any("mask" in key and value is True for key, value in item.items())
+                for item in pipeline
+            )
+
+        # Access the dataset from the configuration
+        dataset_config = self.model.cfg["train_dataloader"]["dataset"]
+
+        if dataset_config["type"] == "ConcatDataset":
+            # If using ConcatDataset, check each dataset individually
+            datasets = dataset_config["datasets"]
+            for dataset in datasets:
+                if check_pipeline_for_mask(dataset["pipeline"]):
+                    return True
+        else:
+            # Otherwise, assume a single dataset with its own pipeline
+            if check_pipeline_for_mask(dataset_config["pipeline"]):
+                return True
+
+        return False
 
     @property
     def category_names(self):
         classes = self.model.model.dataset_meta["classes"]
-        if type(classes) == str:
+        if isinstance(classes, str):
             # https://github.com/open-mmlab/mmdetection/pull/4973
             return (classes,)
         else:
@@ -220,14 +241,12 @@ class MmdetDetectionModel(DetectionModel):
                 Size of the full image after shifting, should be in the form of
                 List[[height, width],[height, width],...]
         """
-
         try:
             from pycocotools import mask as mask_utils
 
             can_decode_rle = True
         except ImportError:
             can_decode_rle = False
-
         original_predictions = self._original_predictions
         category_mapping = self.category_mapping
 
@@ -275,13 +294,13 @@ class MmdetDetectionModel(DetectionModel):
                             )
                     else:
                         bool_mask = mask
-
                     # check if mask is valid
                     # https://github.com/obss/sahi/discussions/696
                     if get_bbox_from_bool_mask(bool_mask) is None:
                         continue
+                    segmentation = get_coco_segmentation_from_bool_mask(bool_mask)
                 else:
-                    bool_mask = None
+                    segmentation = None
 
                 # fix negative box coords
                 bbox[0] = max(0, bbox[0])
@@ -305,7 +324,7 @@ class MmdetDetectionModel(DetectionModel):
                     bbox=bbox,
                     category_id=category_id,
                     score=score,
-                    bool_mask=bool_mask,
+                    segmentation=segmentation,
                     category_name=category_name,
                     shift_amount=shift_amount,
                     full_shape=full_shape,
